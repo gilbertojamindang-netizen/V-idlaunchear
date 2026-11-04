@@ -18,10 +18,10 @@ jobs:
         run: |
           set -e
 
-          ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*.zip' -not -path './.git/*' | head -n 1)"
+          ZIP_FILE="$(find . -maxdepth 4 -type f -iname '*.zip' -not -path './.git/*' | head -n 1)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Walang ZIP file na nakita!"
+            echo "Walang ZIP file na nakita sa repository!"
             exit 1
           fi
 
@@ -67,6 +67,24 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.7'
+
+      - name: Enable AndroidX
+        working-directory: ${{ env.PROJECT_DIR }}
+        shell: bash
+        run: |
+          touch gradle.properties
+
+          if grep -q '^android.useAndroidX=' gradle.properties; then
+            sed -i 's/^android.useAndroidX=.*/android.useAndroidX=true/' gradle.properties
+          else
+            echo 'android.useAndroidX=true' >> gradle.properties
+          fi
+
+          if grep -q '^android.enableJetifier=' gradle.properties; then
+            sed -i 's/^android.enableJetifier=.*/android.enableJetifier=true/' gradle.properties
+          else
+            echo 'android.enableJetifier=true' >> gradle.properties
+          fi
 
       - name: Build debug APK
         working-directory: ${{ env.PROJECT_DIR }}
