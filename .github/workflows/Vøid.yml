@@ -1,4 +1,4 @@
-name: VØIDLAUNCHEAR - Build APK
+name: VØIDLAUNCHEAR - Minecraft Launcher Build
 
 on:
   workflow_dispatch:
@@ -12,14 +12,16 @@ permissions:
 
 jobs:
   build:
+    name: Build VØIDLAUNCHEAR APK
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Download Repository
+
+      # 1. Checkout Repository
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # 2. Setup Java
+      # 2. Setup Java 17
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
@@ -31,68 +33,117 @@ jobs:
         uses: android-actions/setup-android@v3
 
       # 4. Install ZIP Tools
-      - name: Install Unzip
+      - name: Install ZIP Tools
         run: |
           sudo apt-get update
           sudo apt-get install -y unzip zip
 
-      # 5. Extract All ZIP Files
-      - name: Extract Project ZIP Files
+      # 5. Extract ZIP Files
+      - name: Extract Project ZIP
+        shell: bash
         run: |
           mkdir -p extracted
 
-          find . -type f -name "*.zip" \
-            -not -path "./extracted/*" \
-            -print0 | while IFS= read -r -d '' file; do
+          while IFS= read -r -d '' file; do
+            echo "Extracting: $file"
 
-              echo "Extracting: $file"
+            folder="extracted/$(basename "$file" .zip)"
 
-              folder="extracted/$(basename "$file" .zip)"
-              mkdir -p "$folder"
+            mkdir -p "$folder"
 
-              unzip -o "$file" -d "$folder"
+            unzip -oq "$file" -d "$folder"
+
+          done < <(
+            find . -type f -name "*.zip" \
+              -not -path "./extracted/*" \
+              -not -path "./.git/*" \
+              -print0
+          )
+
+      # 6. Locate Android Project
+      - name: Locate Android Project
+        shell: bash
+        run: |
+          PROJECT_DIR=""
+
+          for ROOT in extracted .; do
+
+            while IFS= read -r file; do
+
+              candidate="$(dirname "$file")"
+
+              if [ -f "$candidate/app/build.gradle" ] || \
+                 [ -f "$candidate/app/build.gradle.kts" ]; then
+
+                PROJECT_DIR="$(cd "$candidate" && pwd)"
+                break 2
+
+              fi
+
+            done < <(
+              find "$ROOT" -type f \
+                \( -name settings.gradle -o -name settings.gradle.kts \) \
+                -not -path "./.git/*" \
+                -not -path "./.gradle/*"
+            )
+
           done
 
-      # 6. Find Android Project
-      - name: Locate Android Project
-        run: |
-          PROJECT_DIR=$(find . -type f \
-            \( -name "settings.gradle" -o -name "settings.gradle.kts" \) \
-            -not -path "./.gradle/*" \
-            -not -path "./.git/*" \
-            -print -quit | xargs -r dirname)
-
           if [ -z "$PROJECT_DIR" ]; then
-            echo "Android project not found!"
+            echo "ERROR: Android project not found!"
             exit 1
           fi
 
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
-          echo "Project found: $PROJECT_DIR"
+          echo "Android project found: $PROJECT_DIR"
 
-      # 7. Setup Gradle
+      # 7. Setup Gradle 8.2
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.2'
 
-      # 8. Build APK
+      # 8. Fix Missing Launcher Icon
+      - name: Fix Launcher Resources
+        shell: bash
+        run: |
+          cd "$PROJECT_DIR"
+
+          MANIFEST="app/src/main/AndroidManifest.xml"
+
+          if [ -f "$MANIFEST" ]; then
+            sed -i '/android:icon="@mipmap\/ic_launcher"/d' "$MANIFEST"
+          fi
+
+      # 9. Verify Android Project
+      - name: Verify Project
+        run: |
+          cd "$PROJECT_DIR"
+
+          echo "Checking project files..."
+
+          test -f settings.gradle || \
+          test -f settings.gradle.kts
+
+          test -f app/build.gradle || \
+          test -f app/build.gradle.kts
+
+          echo "Project verification complete!"
+
+      # 10. Build Debug APK
       - name: Build VØIDLAUNCHEAR APK
         run: |
           cd "$PROJECT_DIR"
 
-          if [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-            ./gradlew --no-daemon assembleDebug
-          else
-            gradle --no-daemon assembleDebug
-          fi
+          gradle --no-daemon assembleDebug
 
-      # 9. Upload APK
+      # 11. Upload APK
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VØIDLAUNCHEAR-APK
+          name: VØIDLAUNCHEAR-Minecraft-APK
           path: |
-            **/build/outputs/apk/**/*.apk
+            ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 7
