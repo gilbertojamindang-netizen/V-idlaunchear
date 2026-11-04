@@ -17,10 +17,11 @@ jobs:
         shell: bash
         run: |
           set -e
+
           ZIP_FILE="$(find . -maxdepth 3 -type f -iname '*.zip' -not -path './.git/*' | head -n 1)"
 
           if [ -z "$ZIP_FILE" ]; then
-            echo "Walang ZIP file na nakita sa repository."
+            echo "Walang ZIP file na nakita!"
             exit 1
           fi
 
@@ -30,14 +31,14 @@ jobs:
           PROJECT_FILE="$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) | head -n 1)"
 
           if [ -z "$PROJECT_FILE" ]; then
-            echo "Hindi makita ang settings.gradle sa ZIP."
+            echo "Hindi makita ang settings.gradle!"
             exit 1
           fi
 
           PROJECT_DIR="$(dirname "$PROJECT_FILE")"
 
           if [ ! -f "$PROJECT_DIR/app/build.gradle" ] && [ ! -f "$PROJECT_DIR/app/build.gradle.kts" ]; then
-            echo "Hindi makita ang app module."
+            echo "Hindi makita ang app module!"
             exit 1
           fi
 
@@ -62,10 +63,10 @@ jobs:
         run: |
           yes | sdkmanager --licenses || true
 
-      - name: Set up Gradle 8.2
+      - name: Set up Gradle 8.7
         uses: gradle/actions/setup-gradle@v4
         with:
-          gradle-version: '8.2'
+          gradle-version: '8.7'
 
       - name: Build debug APK
         working-directory: ${{ env.PROJECT_DIR }}
